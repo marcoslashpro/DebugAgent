@@ -24,9 +24,9 @@ That's it for the installation, now you should a `debug_agent` package from wher
 
 The intended use is as a decorator on the risky function, like this:
 ```
-from debug_agent import DebugAgent
+from debug_agent import Agent
 
-@DebugAgent
+@Agent
 def some_risky_function():
   return 'hello' / 10
 ```
