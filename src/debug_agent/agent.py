@@ -5,9 +5,7 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage, SystemMessage
 
 from debug_agent import create_logger, prompt_manager as pm
-from smolagents import evaluate_python_code
-from smolagents.local_python_executor import InterpreterError
-
+from smolagents import LocalPythonExecutor
 
 logger = create_logger(__name__)
 
@@ -19,18 +17,18 @@ class Model:
   1. Store the conversation;
   2. Append dynamically the system prompt to the conversation list after the DebugAgent has been created.
   3. Append the model's response to the conversation dynamically.
-  """
+
+  :param:
+    `system_prompt`: Should be none if the model is used in the DebugAgent. That will take care of formatting the prompt.
+    `model_id`: The id of the model to use, defaults to "Qwen/Qwen2.5-Coder-7B-Instruct". If to be overridden, then a coder model is recommended.
+    `temperature`: Defaults to 0 since we are doing some pragmatic work.
+    """
   def __init__(
     self,
     system_prompt: str | None = None,
     model_id: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
     temperature: int = 0
   ) -> None:
-    """
-    :param system_prompt: Should be none if the model is used in the DebugAgent. That will take care of formatting the prompt.
-    :param model_id: The id of the model to use, defaults to "Qwen/Qwen2.5-Coder-7B-Instruct". If to be overridden, then a coder model is recommended.
-    :param temperature: Defaults to 0 since we are doing some pragmatic work.
-    """
     self.model_id = model_id
     self.temperature = temperature
     self.system_prompt = system_prompt
@@ -55,9 +53,13 @@ class Model:
     The main roles of this function are:
     1. Run inference on the model
     2. Append the model's response to the conversation dynamically.
-    :param messages: The messages list to be added to the conversation list, this can be either the model's messages or
-    messages coming from somewhere else.
-    :return: The content of the response.
+
+    :param:
+        `messages`: The messages list to be added to the conversation list, this can be either the model's messages or
+        messages coming from somewhere else.
+
+    :return: 
+      The content of the response.
     """
     response = self.coder.invoke(messages)
     self.messages.append(AIMessage(content=response.content))
@@ -68,8 +70,11 @@ class Model:
   def add_message(self, msg: str) -> None:
     """
     Helper function to add a message to the conversation list.
-    :param msg: The string of the message to be added to the conversation list, the formatting is done internally.
-    :return: None, modifies the messages list internally.
+
+    :param:
+      `msg`: The string of the message to be added to the conversation list, the formatting is done internally.
+    
+    :return: `None`, modifies the messages list internally.
     """
     self.messages.append(HumanMessage(content=msg))
     logger.info(f"New message added, full conversation: {self.messages}")
@@ -79,45 +84,58 @@ class DebugAgent(Pdb):
   """
   Custom DebugAgent Interface, it inherits from the Pdb Interface.
   Most of the parameters should not be overridden, unless you know what you're doing.
+
   Example usage:
-  >>>
-  >>> from debug_agent import DebugAgent, Model
-  >>>
-  >>> try:
-  >>>   some_risky_op()
-  >>> except Exception as e:
-  >>>   debugger = DebugAgent(
-  >>>     model=Model(),
-  >>>     error=e,
-  >>>   )
-  >>>   debugger.interaction(None, e.__traceback__)
+
+  ```
+   from debug_agent import DebugAgent, Model
+  try:
+    some_risky_op()
+  except Exception as e:
+    debugger = DebugAgent(
+      model=Model(),
+       error=e,
+     )
+    debugger.interaction(None, e.__traceback__)
+  ```
+
+  :param:
+
+    `model`: The LLM to use, mainly a wrapper around Langchain ChatHuggingFace.
+
+    `error`: The exception to analyze in the debugger.
+
+    `n_steps`: The maximum number of steps to run the agent for.
+
+    `executor`: The Executor that carries the burden of parsing the model's code.
+    Here, the smolagents LocalPythonExecutor is used.
+
+    `complete_key`: SHOULD NOT BE OVERRIDDEN.
+
+    `skip`: SHOULD NOT BE OVERRIDDEN.
+
+    `no_sig_int`: SHOULD NOT BE OVERRIDDEN.
+
+    `read_rc`: SHOULD NOT BE OVERRIDDEN.
   """
 
   def __init__(
     self,
     model: Model,
     error: Exception,
+    executor = LocalPythonExecutor(['']),
     n_steps: int = 5,
     complete_key='tab',
     skip=None,
     no_sig_int=False,
     read_rc=True,
   ) -> None:
-    """
-    :param model: The LLM to use, mainly a wrapper around Langchain ChatHuggingFace.
-    :param error: The exception to analyze in the debugger.
-    :param n_steps: The maximum number of steps to run the agent for.
-    :param complete_key: SHOULD NOT BE OVERRIDDEN.
-    :param skip: SHOULD NOT BE OVERRIDDEN.
-    :param no_sig_int: SHOULD NOT BE OVERRIDDEN.
-    :param read_rc: SHOULD NOT BE OVERRIDDEN.
-    """
-
     # --- New Parameters --- #
     self.model: Model = model
     self.messages: list[str] = []
-    self.error: Exception = error
+    self.exception: Exception = error
     self.n_steps: int = n_steps
+    self.executor = executor
 
     # --- Initialize model's system prompt --- #
     add_system_prompt_to_messages(self.model.messages, self.initialize_system_prompt(error=error))
@@ -129,36 +147,43 @@ class DebugAgent(Pdb):
 
 
   # --- Overrides --- #
-
   def message(self, msg: str) -> None:
     """
     Override the original message helper function in order to append each message to the message list
-    :param msg: The output from the Pdb
+
+    :param:
+
+      `msg`: The output from the Pdb
+
     :return: None
     """
     if not msg.startswith("(Agent)"):
       self.messages.append(msg)
     super().message(msg)
 
-
-  def precmd(self, line):
+  def onecmd(self, line):  # type: ignore[ovveride]
     """
-    Override the original precmd method in order to implement a custom Python Interpreter.
-    Allowing the model to interact with python runtime and possibly the shell is a powerful operation that comes with great risks.
-    The Custom Python Interpreter comes from the smolagents package, it allows us to restrict the model's actions and the harm it might cause.
+    Overrides the original onecmd method from Pdb.
+    The reason being that we want to execute the model's output in a safe environment,
+    making sure that no harm is caused to the system.
+    Here we take advantage of the executor given in the __init__, that is supposed to parse the model's code
+    and forbid illegal actions.
     """
-    try:
-      evaluate_python_code(code=''.join([cmd for cmd in self.cmdqueue]))
-    except InterpreterError:
-      pass
-    return super().precmd(line)
+    self.executor(code_action=''.join([cmd for cmd in self.cmdqueue]))
+    super().onecmd(line)
 
   def postcmd(self, stop: bool, line: str) -> bool:
     """
     Override the original postcmd function in order to run inference on the model after each executed command.
-    :param stop: Should not be supplied, this is provided by the state of the Pdb class that the DebugAgent inherits from.
-    :param line: Should not be supplied, this is provided by the state of the Pdb class that the DebugAgent inherits from.
-    :return: The original call to the postcmd function
+    If the last command given by the model is 'q', then we quit the debugger.
+
+    :param:
+
+      `stop`: Should not be supplied, this is provided by the state of the Pdb class that the DebugAgent inherits from.
+      `line`: Should not be supplied, this is provided by the state of the Pdb class that the DebugAgent inherits from.
+
+    :return:
+      The original call to the postcmd function
     """
     new_message = ''.join(self.messages)
     logger.info(f"New message created: {new_message}")
@@ -174,15 +199,26 @@ class DebugAgent(Pdb):
     self.cmdqueue.append(response)
     for cmd in self.cmdqueue:
       self.message(f'(Agent) {cmd}')
-    return super().postcmd(stop, line)
+
+    if self.cmdqueue is not None and self.cmdqueue[-1] == 'q':
+      return super().postcmd(True, line)
+
+    return super().postcmd(False, line)
 
 
   # --- Custom Methods --- #
   def initialize_system_prompt(self, error: Exception) -> str:
     """
     We render the model's initial prompt base on the error with which we initialized the agent.
-    :param error: The error from which we'll extract useful initial context for the model
-    :return: The formatted prompt.
+
+    :param:
+      `error`: The error from which we'll extract useful initial context for the model
+
+    :return:
+      The formatted prompt.
+
+    :raises:
+      `TemplateError`, in case that the template could have not been located or if the arguments are not the right ones.
     """
     return pm.render_template(
       'system_prompt.j2',
@@ -192,12 +228,20 @@ class DebugAgent(Pdb):
       error_message=str(error),
     )
 
+
 def add_system_prompt_to_messages(messages: list[BaseMessage | None], system_prompt: str) -> None:
   """
   Simple helper function to add the system prompt to the messages list.
-  :param messages: The messages list to append the system prompt to.
-  :param system_prompt: The system prompt to be added to the messages list, if using the DebugAgent, this is done automatically.
-  :return: None, modifies the messages list internally.
+
+  :param:
+    `messages`: The messages list to append the system prompt to.
+    `system_prompt`: The system prompt to be added to the messages list, if using the DebugAgent, this is done automatically.
+
+  :return:
+    `None`, modifies the messages list internally.
+
+  :raises:
+    `ValueError`, in case that the messages list is not empty.
   """
   if len(messages) == 0:
     messages.append(

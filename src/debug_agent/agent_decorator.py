@@ -1,7 +1,8 @@
 from functools import wraps, partial
 from typing import Callable
 
-from debug_agent import create_logger, prompt_manager as pm
+from debug_agent import create_logger
+from debug_agent.debugger_flow import run_debugger
 
 
 logger = create_logger(__name__)
@@ -10,10 +11,16 @@ logger = create_logger(__name__)
 def Agent(f=None, *, model_id: str | None = None, temperature: int | None = None, n_steps: int | None = None) -> Callable:
 	"""
 	The decorator to use in order to start the agent debugging session.
-	:param f: The function to decorate, this shall not be provided
-	:param model_id: The id of the model to use, if not provided, defaults internally to "Qwen2.5-7b-Code-Instruct"
-	:param temperature: The temperature to set for the model, defaults internally to 0.
-	:param n_steps: The number of steps to use for the model, defaults internally to 5.
+
+	:params:
+
+		`f`: The function to decorate, this shall not be provided
+
+		`model_id`: The id of the model to use, if not provided, defaults internally to "Qwen2.5-7b-Code-Instruct"
+
+		`temperature`: The temperature to set for the model, defaults internally to 0.
+
+		`n_steps`: The number of steps to use for the model, defaults internally to 5.
 	"""
 	if f is None:
 		# Allows decorator to be used with parameters
@@ -41,6 +48,8 @@ def Agent(f=None, *, model_id: str | None = None, temperature: int | None = None
 			else:
 				debug_agent = agent.DebugAgent(model=model, error=e)
 
-			debug_agent.interaction(None, e.__traceback__)
+			response = run_debugger(agent=debug_agent, traceback=e.__traceback__)
+			print(response)
 			return None
+
 	return inner
