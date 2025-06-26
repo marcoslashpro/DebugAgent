@@ -15,7 +15,7 @@ def _sum(x: Iterable[Any]) -> int:
 def average(numbers):
 	return _sum(numbers) / len(numbers)
 
-@Agent(temperature=0.1)
+@Agent()
 def main():
 	numbers = []
 	while True:

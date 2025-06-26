@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage, BaseMessage, AIMessage, System
 
 from debug_agent import create_logger, prompt_manager as pm
 from smolagents import evaluate_python_code
+from smolagents.local_python_executor import InterpreterError
 
 
 logger = create_logger(__name__)
@@ -34,18 +35,6 @@ class Model:
     self.temperature = temperature
     self.system_prompt = system_prompt
     self.messages: list[BaseMessage] = []
-
-  def add_system_prompt_to_messages(self, system_prompt: str) -> None:
-    """
-    Simple helper function to add the system prompt to the messages list.
-    :param system_prompt: The system prompt to be added to the messages list, if using the DebugAgent, this is done automatically.
-    :return: None, modifies the messages list internally.
-    """
-    self.messages.append(
-      SystemMessage(
-        system_prompt
-      )
-    )
 
   @property
   def llm(self) -> HuggingFaceEndpoint:
@@ -125,13 +114,13 @@ class DebugAgent(Pdb):
     """
 
     # --- New Parameters --- #
-    self.model = model
+    self.model: Model = model
     self.messages: list[str] = []
-    self.error = error
-    self.n_steps = n_steps
+    self.error: Exception = error
+    self.n_steps: int = n_steps
 
     # --- Initialize model's system prompt --- #
-    self.model.add_system_prompt_to_messages(self.initialize_system_prompt(error=error))
+    add_system_prompt_to_messages(self.model.messages, self.initialize_system_prompt(error=error))
 
     # --- Pdb Initializations and params --- #
     self.botframe = None
@@ -156,9 +145,12 @@ class DebugAgent(Pdb):
     """
     Override the original precmd method in order to implement a custom Python Interpreter.
     Allowing the model to interact with python runtime and possibly the shell is a powerful operation that comes with great risks.
-    The Custom Python Interpreter comes from the smolagents package, it allows us to restrict the model's actions and the harm ir maight cause.
+    The Custom Python Interpreter comes from the smolagents package, it allows us to restrict the model's actions and the harm it might cause.
     """
-    evaluate_python_code(code=''.join([cmd for cmd in self.cmdqueue]))
+    try:
+      evaluate_python_code(code=''.join([cmd for cmd in self.cmdqueue]))
+    except InterpreterError:
+      pass
     return super().precmd(line)
 
   def postcmd(self, stop: bool, line: str) -> bool:
@@ -199,3 +191,23 @@ class DebugAgent(Pdb):
       error_name=error.__class__.__name__,
       error_message=str(error),
     )
+
+def add_system_prompt_to_messages(messages: list[BaseMessage | None], system_prompt: str) -> None:
+  """
+  Simple helper function to add the system prompt to the messages list.
+  :param messages: The messages list to append the system prompt to.
+  :param system_prompt: The system prompt to be added to the messages list, if using the DebugAgent, this is done automatically.
+  :return: None, modifies the messages list internally.
+  """
+  if len(messages) == 0:
+    messages.append(
+      SystemMessage(
+        system_prompt
+      )
+    )
+    return
+
+  raise ValueError(
+    f"The messages list should be empty in order to add the system prompt, got {messages}"
+  )
+
