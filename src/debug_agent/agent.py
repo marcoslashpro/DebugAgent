@@ -101,6 +101,7 @@ class DebugAgent(Pdb):
   >>>     model=Model(),
   >>>     error=e,
   >>>   )
+  >>>   debugger.interaction(None, e.__traceback__)
   """
 
   def __init__(
