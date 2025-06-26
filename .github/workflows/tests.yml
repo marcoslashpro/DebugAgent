@@ -1,7 +1,8 @@
 on:
+  workflow_call:
   push:
     branches:
-      - main
+      main
 
 jobs:
   tests:
@@ -16,7 +17,7 @@ jobs:
       - name: setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.12
+          python-version: 3.12 
 
       - name: Install uv
         run: pip install uv
