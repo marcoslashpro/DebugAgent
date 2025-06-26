@@ -37,5 +37,9 @@ Optionally, you can also provide parameters to the decorator, which allows us to
 
 Keep in mind tho, that for the moment, the only models available are the one that can be used through the ChatHuggingFace Langchain interface.
 
+## Considerations
+
+For the moment, the agent seems to perform pretty well on minor errors, such as ZeroDivisionErrors, TypeError, ValueErrors, while showcasing the ability to dig into the stacktrace in order to find where the error originated from. I think that, as the prompt improves and, if we get to that point, with some debugging-specific fine-tuning, this can become a valuable application for python developers.
+
 # Happy Coding!
 And come back to me, if you find any problems while using the debugger.
