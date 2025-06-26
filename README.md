@@ -37,5 +37,5 @@ Optionally, you can also provide parameters to the decorator, which allows us to
 
 Keep in mind tho, that for the moment, the only models available are the one that can be used through the ChatHuggingFace Langchain interface.
 
-## Problems:
-1. Prompt is quite weak at the moment, the agent might not behave as intended(e.g. returns answer in a wrongly formatted manner). If this happens, the application raises a TypeError, I am looking into the solution, both of the error handling and agent's response format.
+# Happy Coding!
+And come back to me, if you find any problems while using the debugger.
