@@ -21,6 +21,12 @@ uv add debug_agent
 ```
 That's it for the installation, now you should a `debug_agent` package from where you can import the agent.
 
+The only thing to keep in mind is that you are going to have to have a HuggingFace API key with permission to run inference with Inference Providers, you can save it locally on you machine by doing:
+```
+huggingface-cli login
+```
+You'll then be prompted to insert the `hf_token`.
+
 The intended use is as a decorator on the risky function, like this:
 ```
 from debug_agent import Agent
