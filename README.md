@@ -15,10 +15,9 @@ This is not by any mean a finished application, but it seems to be working incre
 
 The user experience is straight forward:
 
-Clone the package and install(a PyPi version is coming in the future)
+Install the PyPi Package:
 ```
-git clone https://github.com/marcoslashpro/DebugAgent && cd DebugAgent
-uv pip install -e .
+uv add debug_agent
 ```
 That's it for the installation, now you should a `debug_agent` package from where you can import the agent.
 
