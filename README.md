@@ -1,13 +1,6 @@
 # DebugAgent
 
-A barebone MVP of an agent-based python debugger.
-The system is built on top of PDB, the official python debugger.
-
-For the moment, two main things happen:
-
-1. The Output of the Pdb debugger becomes the input of the Agent, and viceversa;
-2. The Agent's actions are limited by a custom Python Interpreter(kindly borrowed from the smolagents library), that limits the harm of the Agent.
-
+An MVP of a Python agent-debugger.
 
 This is not by any mean a finished application, but it seems to be working incredebily good as is.
 
@@ -19,15 +12,15 @@ Install the PyPi Package:
 ```
 uv add debug_agent
 ```
-That's it for the installation, now you should a `debug_agent` package from where you can import the agent.
+That's it for the installation, now you should have a `debug_agent` package from where you can import the agent.
 
-The only thing to keep in mind is that you are going to have to have a HuggingFace API key with permission to run inference with Inference Providers, you can save it locally on you machine by doing:
+The only thing to keep in mind is that you are going to have to have a HuggingFace API key with permission to run inference with Inference Providers, you can save the token locally on you machine by doing:
 ```
 huggingface-cli login
 ```
 You'll then be prompted to insert the `hf_token`.
 
-The intended use is as a decorator on the risky function, like this:
+The intended use is as a decorator on functions that raise an error, like this:
 ```
 from debug_agent import Agent
 
@@ -41,6 +34,10 @@ The Agent will then start interacting with the debugger, using its commands to a
 Optionally, you can also provide parameters to the decorator, which allows us to set a `temperature` for the model, the `n_steps` that the agent should take, and the `model_id`, in order to specify a different model.
 
 Keep in mind tho, that for the moment, the only models available are the one that can be used through the ChatHuggingFace Langchain interface.
+
+## Security
+When working on an application like this, where we give the agent access to an interactive python script, security is a must.
+I have therefore implemented a custom PdbInterpreter, that only allows valid Pdb commands to be exectued, raising a `DangerousActionError` if ever the agent outputs invalid/malicious commands.
 
 ## Considerations
 
