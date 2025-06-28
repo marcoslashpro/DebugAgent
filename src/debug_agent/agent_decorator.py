@@ -3,12 +3,20 @@ from typing import Callable
 
 from debug_agent import create_logger
 from debug_agent.debugger_flow import run_debugger
+from debug_agent.executors import BaseExecutor, PdbExecutor
 
 
 logger = create_logger(__name__)
 
 
-def Agent(f=None, *, model_id: str | None = None, temperature: int | None = None, n_steps: int | None = None) -> Callable:
+def Agent(
+		f=None, *,
+		model_id: str = 'Qwen/Qwen3-8B',
+		temperature: int = 0,
+		n_steps: int = 3,
+		log_thoughts: bool = False,
+		executor: PdbExecutor = PdbExecutor()
+	) -> Callable:
 	"""
 	The decorator to use in order to start the agent debugging session.
 
@@ -16,11 +24,16 @@ def Agent(f=None, *, model_id: str | None = None, temperature: int | None = None
 
 		`f`: The function to decorate, this shall not be provided
 
-		`model_id`: The id of the model to use, if not provided, defaults internally to "Qwen2.5-7b-Code-Instruct"
+		`model_id`: The id of the model to use, if not provided, defaults to 'Qwen/Qwen3-8B'
 
-		`temperature`: The temperature to set for the model, defaults internally to 0.
+		`temperature`: The temperature to set for the model, defaults to 0.
 
-		`n_steps`: The number of steps to use for the model, defaults internally to 5.
+		`log_thoughts`: A boolean flag to decide if the application should log the model's thoughts
+
+		`n_steps`: The max number of steps for the agent in the debugger, defaults to 5.
+
+		`executor`: A executor class that implements a .sanitize method that analyzes the given code and raises a DanguerousActionError if the 
+		given code is not defined as safe to execute.
 	"""
 	if f is None:
 		# Allows decorator to be used with parameters
@@ -31,22 +44,23 @@ def Agent(f=None, *, model_id: str | None = None, temperature: int | None = None
 		try:
 			return f(*args, **kwargs)
 		except Exception as e:
+			if not e.__traceback__:
+				raise RuntimeError(
+					f"The exception provided does not have a traceback. "
+					"In order to launch the Pdb, we need to have access to the exception's traceback. "
+					f"The traceback we got is: {e.__traceback__}, please provide it."
+				)
+
 			from debug_agent import agent
 
 			# Allow the model to be instantiated based on the parameters provided in the decorator
-			if model_id is not None and temperature is not None:
-				model = agent.Model(model_id=model_id, temperature=temperature)
-			elif temperature is not None:
-				model = agent.Model(temperature=temperature)
-			elif model_id is not None:
-				model = agent.Model(model_id=model_id)
-			else:
-				model = agent.Model()
+			model = agent.Model(
+				model_id=model_id,
+				temperature=temperature,
+				log_thoughts=log_thoughts
+			)
 
-			if n_steps is not None:
-				debug_agent = agent.DebugAgent(model=model, n_steps=n_steps, error=e)
-			else:
-				debug_agent = agent.DebugAgent(model=model, error=e)
+			debug_agent = agent.PdbAgent(model=model, error=e, n_steps=n_steps, executor=executor)
 
 			response = run_debugger(agent=debug_agent, traceback=e.__traceback__)
 			print(response)

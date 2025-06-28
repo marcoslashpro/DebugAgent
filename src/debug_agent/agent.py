@@ -5,7 +5,8 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_core.messages import HumanMessage, BaseMessage, AIMessage, SystemMessage
 
 from debug_agent import create_logger, prompt_manager as pm
-from smolagents import LocalPythonExecutor
+from debug_agent.executors import PdbExecutor
+
 
 logger = create_logger(__name__)
 
@@ -25,14 +26,16 @@ class Model:
     """
   def __init__(
     self,
+    model_id: str,
+    temperature: int,
+    log_thoughts: bool,
     system_prompt: str | None = None,
-    model_id: str = "Qwen/Qwen2.5-Coder-7B-Instruct",
-    temperature: int = 0
   ) -> None:
     self.model_id = model_id
     self.temperature = temperature
     self.system_prompt = system_prompt
     self.messages: list[BaseMessage] = []
+    self.log_thoughts = log_thoughts
 
   @property
   def llm(self) -> HuggingFaceEndpoint:
@@ -64,8 +67,10 @@ class Model:
     response = self.coder.invoke(messages)
     self.messages.append(AIMessage(content=response.content))
 
-    logger.info(f"Got back response of: {response}")
-    return response.content
+    logger.info(f"Parsing the model's toughts")
+    parsed_response = parse_thinking_from_response(response.content, self.log_thoughts)
+
+    return parsed_response
 
   def add_message(self, msg: str) -> None:
     """
@@ -73,14 +78,14 @@ class Model:
 
     :param:
       `msg`: The string of the message to be added to the conversation list, the formatting is done internally.
-    
+
     :return: `None`, modifies the messages list internally.
     """
     self.messages.append(HumanMessage(content=msg))
     logger.info(f"New message added, full conversation: {self.messages}")
 
 
-class DebugAgent(Pdb):
+class PdbAgent(Pdb):
   """
   Custom DebugAgent Interface, it inherits from the Pdb Interface.
   Most of the parameters should not be overridden, unless you know what you're doing.
@@ -123,8 +128,8 @@ class DebugAgent(Pdb):
     self,
     model: Model,
     error: Exception,
-    executor = LocalPythonExecutor(['']),
-    n_steps: int = 5,
+    n_steps: int,
+    executor: PdbExecutor,
     complete_key='tab',
     skip=None,
     no_sig_int=False,
@@ -169,7 +174,7 @@ class DebugAgent(Pdb):
     Here we take advantage of the executor given in the __init__, that is supposed to parse the model's code
     and forbid illegal actions.
     """
-    self.executor(code_action=''.join([cmd for cmd in self.cmdqueue]))
+    self.executor.sanitize(code=''.join([cmd for cmd in self.cmdqueue]))
     super().onecmd(line)
 
   def postcmd(self, stop: bool, line: str) -> bool:
@@ -229,7 +234,7 @@ class DebugAgent(Pdb):
     )
 
 
-def add_system_prompt_to_messages(messages: list[BaseMessage | None], system_prompt: str) -> None:
+def add_system_prompt_to_messages(messages: list[BaseMessage], system_prompt: str) -> None:
   """
   Simple helper function to add the system prompt to the messages list.
 
@@ -255,3 +260,36 @@ def add_system_prompt_to_messages(messages: list[BaseMessage | None], system_pro
     f"The messages list should be empty in order to add the system prompt, got {messages}"
   )
 
+def parse_thinking_from_response(response: str, log_thoughts: bool = True) -> str:
+  """
+  We instruct models to think in XML paragraphs like: <think></think>.
+  This function is used to remove that part from the model, and optionally log it.
+
+  :param:
+
+    `response`: The pre-parsed model's response
+
+    `log_thoughts`: a boolean flag to decide if we should log the thinking process or not.
+
+  :return:
+
+    The parsed model's response 
+
+  :raises:
+
+    `ValueError`: If the model's response, after parsing the toughts is empty
+  """
+  before, sep, after = response.partition('</think>')
+
+  if not sep or not after:
+    return before.strip()
+
+  if log_thoughts:
+    logger.info(f"The model thought: {before + sep}")
+
+  if not after.strip():
+    raise ValueError(
+      f"The model failes to generate a valid response, got response of: {after}"
+    )
+
+  return after.strip()

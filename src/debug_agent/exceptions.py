@@ -1,0 +1,2 @@
+class DangerousActionError(Exception):
+  pass

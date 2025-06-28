@@ -1,5 +1,5 @@
 from debug_agent.debugger_flow import run_debugger, graph, State, debugger
-from debug_agent import DebugAgent, Model, create_logger
+from debug_agent import PdbAgent, Model, create_logger
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph
@@ -13,13 +13,13 @@ logger = create_logger(__name__)
 
 
 STATE = State(
-  agent=DebugAgent(Model(), error=MagicMock()),
+  agent=PdbAgent(Model('ANY', 0, False), error=MagicMock(), executor=MagicMock(), n_steps=5),
   messages=[],
   traceback=MagicMock(spec=TracebackType)
 )
 
 
-@patch('debug_agent.agent.DebugAgent.interaction', return_value=None, side_effect=None)
+@patch('debug_agent.agent.PdbAgent.interaction', return_value=None, side_effect=None)
 def test_debugger_message_format(mock_interaction):
   agent = STATE['agent']
   agent.model.messages.extend(

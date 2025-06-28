@@ -1,4 +1,4 @@
-from debug_agent.agent import DebugAgent
+from debug_agent.agent import PdbAgent
 from debug_agent import create_logger
 
 from langgraph.graph import add_messages, StateGraph, START, END
@@ -11,7 +11,7 @@ logger = create_logger(__name__)
 
 
 class State(TypedDict):
-  agent: DebugAgent
+  agent: PdbAgent
   messages: Annotated[list, add_messages]
   traceback: TracebackType
 
@@ -48,7 +48,7 @@ graph = builder.compile()
 
 
 def run_debugger(
-    agent: DebugAgent,
+    agent: PdbAgent,
     traceback: TracebackType
   ) -> str | list[str | dict] | None:
 

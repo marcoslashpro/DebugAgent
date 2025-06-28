@@ -15,11 +15,13 @@ def _sum(x: Iterable[Any]) -> int:
 def average(numbers):
 	return _sum(numbers) / len(numbers)
 
-@Agent()
+
+@Agent
 def main():
 	numbers = []
+	print("Enter some numbers, enter 'done' when you're done")
 	while True:
-		number = input("You: ")
+		number = input("Enter a number: ")
 		if number == 'done':
 			print(f'The average of the numbers is: {average(numbers)}')
 			return
@@ -27,4 +29,9 @@ def main():
 
 
 if __name__ == "__main__":
+	print("""
+This is an interactive demo of the agent.
+There is a bug in the main.py file, I dare you to find it, the agent is pretty good at it.
+Now we start:
+""")
 	main()
