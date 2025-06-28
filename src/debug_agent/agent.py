@@ -93,13 +93,16 @@ class PdbAgent(Pdb):
   Example usage:
 
   ```
-   from debug_agent import DebugAgent, Model
+   from debug_agent import PdbAgent, Model, PdbExecutor
   try:
     some_risky_op()
+
   except Exception as e:
-    debugger = DebugAgent(
+    debugger = PdbAgent(
       model=Model(),
-       error=e,
+      error=e,
+      n_steps=5,
+      executor=PdbExecutor()
      )
     debugger.interaction(None, e.__traceback__)
   ```
@@ -113,7 +116,7 @@ class PdbAgent(Pdb):
     `n_steps`: The maximum number of steps to run the agent for.
 
     `executor`: The Executor that carries the burden of parsing the model's code.
-    Here, the smolagents LocalPythonExecutor is used.
+    Here, a custom PdbExecutor is used.
 
     `complete_key`: SHOULD NOT BE OVERRIDDEN.
 
